@@ -28,6 +28,14 @@ let normalize (v:Vec3) =
     v*k
 let dot (a:Vec3) (b:Vec3) = a.x*b.x + a.y*b.y + a.z*b.z
 let colorFromVec3 (v:Vec3) : Color = {r=v.x; g=v.y; b=v.z}
+let randomInUnitSphere (rnd:System.Random) = 
+    let x1 = (float32 (rnd.NextDouble()))
+    let a = 1.0f - x1*x1
+    let x2 = (float32 (rnd.NextDouble())) * sqrt(a)
+    let b = a - x2*x2
+    let x3 = (float32 (rnd.NextDouble())) * sqrt(b)
+    let XYZ = [x1; x2; x3] |> List.map (fun x -> (rnd.Next(), x)) |> List.sortBy fst |> List.map (fun (x,y) -> y)
+    Vec3(XYZ.[0], XYZ.[1], XYZ.[2])
 
 type Ray = 
     struct
@@ -82,7 +90,7 @@ let hitSceneObject (m:MinMax) (r:Ray) (hitable:SceneObject)=
     | SphereObject s -> hitSphere s m r
     | Cube -> None
 
-let colorRay (hitables:SceneObject list) (r:Ray) = 
+let colorRay (rnd:System.Random) (hitables:SceneObject list) (r:Ray) = 
     let mm = {min=0.0f; max=System.Single.MaxValue}
     let boundray = hitSceneObject mm r
     let optionMin (x:HitRecord option) (y:HitRecord option) =
@@ -99,7 +107,7 @@ let colorRay (hitables:SceneObject list) (r:Ray) =
     let hit = getClosest hitables None
     match hit with
         | Some hrec -> 
-            (0.5f * (hrec.normal + Vec3(1.0f, 1.0f, 1.0f)))
+            (0.5f * (hrec.normal + Vec3(1.0f, 1.0f, 1.0f) + (randomInUnitSphere rnd)))
             |> colorFromVec3 
         | None -> 
             let norm_dir = normalize r.direction
@@ -132,7 +140,7 @@ let main argv =
         for i in [0 .. nx-1] do
             let rndlist = [for _ in [1..ns] do yield (rnd.NextDouble(), rnd.NextDouble())]
             let icol = rndlist |> List.map (fun (x,y) -> (((float32 i) + (float32 x)) / (float32  nx), ((float32 j) + (float32 y)) / (float32 ny))) 
-                    |> List.map (fun (u,v) -> colorRay world (cam.getRay u v) ) |> List.fold addColors ({r=0.0f; g=0.0f; b=0.0f}) 
+                    |> List.map (fun (u,v) -> colorRay rnd world (cam.getRay u v) ) |> List.fold addColors ({r=0.0f; g=0.0f; b=0.0f}) 
                     |> fun c -> {r=c.r/(float32 ns); g=c.g/(float32 ns); b=c.b/(float32 ns)} |> colorToIntColor
             printfn "%d %d %d" icol.ir icol.ig icol.ib
     0 // return an integer exit code
