@@ -1,6 +1,7 @@
 ﻿type Color = {r:float32; g:float32; b:float32 }
-type IntColor = {r:int; g:int; b:int }
-let colorToIntColor (c:Color) = { r=(255.99f * c.r |> int ); g=(255.99f * c.g |> int); b=(255.99f * c.b |> int)}
+let addColors (c1:Color) (c2:Color) = {r=c1.r+c2.r; g=c1.g+c2.g; b=c1.b+c2.b}
+type IntColor = {ir:int; ig:int; ib:int }
+let colorToIntColor (c:Color) = { ir=(255.99f * c.r |> int ); ig=(255.99f * c.g |> int); ib=(255.99f * c.b |> int)}
 
 type Vec3 =
     struct
@@ -90,33 +91,48 @@ let colorRay (hitables:SceneObject list) (r:Ray) =
         | (Some x', None) -> Some x'
         | (None, Some y') -> Some y'
         | (None, None) -> None
-    let hit = hitables |> List.map boundray |> List.fold optionMin None
+    //let hit = hitables |> List.map boundray |> List.fold optionMin None
+    let rec getClosest l acc = 
+        match l with
+        | [] -> acc
+        | x::tail -> getClosest tail (optionMin (boundray x) acc)
+    let hit = getClosest hitables None
     match hit with
         | Some hrec -> 
             (0.5f * (hrec.normal + Vec3(1.0f, 1.0f, 1.0f)))
-            |> colorFromVec3 |> colorToIntColor
+            |> colorFromVec3 
         | None -> 
             let norm_dir = normalize r.direction
             let t = 0.5f*(norm_dir.y + 1.0f)
             let cv = lerp (Vec3(1.0f, 1.0f, 1.0f)) t (Vec3(0.5f, 0.7f, 1.0f))
-            (colorFromVec3 cv) |> colorToIntColor 
+            (colorFromVec3 cv) 
+
+type Camera = 
+    struct
+        val origin:Vec3
+        val lowerLeftCorner:Vec3
+        val horizontal:Vec3
+        val vertical:Vec3
+        new(o,l,h,v) = {origin=o; lowerLeftCorner=l; horizontal=h; vertical=v }
+    end
+    static member defaultCamera = Camera(Vec3(0.0f, 0.0f, 0.0f), Vec3(-2.0f, -1.0f, -1.0f), Vec3(4.0f, 0.0f, 0.0f), Vec3(0.0f, 2.0f, 0.0f))
+    member this.getRay (u:float32) (v:float32) = Ray(this.origin, this.lowerLeftCorner + u*this.horizontal + v*this.vertical) 
 
 [<EntryPoint>]
 let main argv = 
-    let (nx,ny) = (200, 100)
+    let (nx,ny,ns) = (200, 100, 100)
     printfn "P3\n %d %d \n255" nx ny
-    let lowerLeftCorner = Vec3(-2.0f, -1.0f, -1.0f)
-    let horizontal = Vec3(4.0f, 0.0f, 0.0f)
-    let vertical = Vec3(0.0f, 2.0f, 0.0f)
-    let origin = Vec3(0.0f, 0.0f, 0.0f)
+    let cam = Camera.defaultCamera
     let world = [
         SphereObject {center=Vec3(0.0f, 0.0f, -1.0f); radius=0.5f };
         SphereObject {center=Vec3(0.0f, -100.5f, -1.0f); radius=100.0f}
         ]
+    let rnd = System.Random()
     for j in [ny-1 .. -1 .. 0] do
         for i in [0 .. nx-1] do
-            let (u,v) = ((float32 i) / (float32 nx), (float32 j) / (float32 ny))
-            let r = Ray(origin, lowerLeftCorner + u*horizontal + v*vertical)
-            let icol = colorRay world r
-            printfn "%d %d %d" icol.r icol.g icol.b
+            let rndlist = [for _ in [1..ns] do yield (rnd.NextDouble(), rnd.NextDouble())]
+            let icol = rndlist |> List.map (fun (x,y) -> (((float32 i) + (float32 x)) / (float32  nx), ((float32 j) + (float32 y)) / (float32 ny))) 
+                    |> List.map (fun (u,v) -> colorRay world (cam.getRay u v) ) |> List.fold addColors ({r=0.0f; g=0.0f; b=0.0f}) 
+                    |> fun c -> {r=c.r/(float32 ns); g=c.g/(float32 ns); b=c.b/(float32 ns)} |> colorToIntColor
+            printfn "%d %d %d" icol.ir icol.ig icol.ib
     0 // return an integer exit code
