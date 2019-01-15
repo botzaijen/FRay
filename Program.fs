@@ -1,5 +1,6 @@
 ﻿type Color = {r:float32; g:float32; b:float32 }
 let addColors (c1:Color) (c2:Color) = {r=c1.r+c2.r; g=c1.g+c2.g; b=c1.b+c2.b}
+let mulColor (f:float32) (c:Color) = {r=f*c.r; g=f*c.g; b=f*c.b}
 type IntColor = {ir:int; ig:int; ib:int }
 let colorToIntColor (c:Color) = { ir=(255.99f * c.r |> int ); ig=(255.99f * c.g |> int); ib=(255.99f * c.b |> int)}
 
@@ -90,7 +91,7 @@ let hitSceneObject (m:MinMax) (r:Ray) (hitable:SceneObject)=
     | SphereObject s -> hitSphere s m r
     | Cube -> None
 
-let colorRay (rnd:System.Random) (hitables:SceneObject list) (r:Ray) = 
+let rec colorRay (rnd:System.Random) (hitables:SceneObject list) (r:Ray) = 
     let mm = {min=0.0f; max=System.Single.MaxValue}
     let boundray = hitSceneObject mm r
     let optionMin (x:HitRecord option) (y:HitRecord option) =
@@ -107,8 +108,9 @@ let colorRay (rnd:System.Random) (hitables:SceneObject list) (r:Ray) =
     let hit = getClosest hitables None
     match hit with
         | Some hrec -> 
-            (0.5f * (hrec.normal + Vec3(1.0f, 1.0f, 1.0f) + (randomInUnitSphere rnd)))
-            |> colorFromVec3 
+            let target = hrec.p + hrec.normal + (randomInUnitSphere rnd)
+            let newRay = Ray(hrec.p, (target - hrec.p))  
+            (mulColor 0.5f  (colorRay rnd hitables newRay))
         | None -> 
             let norm_dir = normalize r.direction
             let t = 0.5f*(norm_dir.y + 1.0f)
