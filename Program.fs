@@ -48,19 +48,27 @@ type Ray =
 let pointAt (r:Ray) (t:float32) = Vec3(r.origin + t*r.direction)
 
 let lerp (source:Vec3) t (dest:Vec3) = (1.0f-t)*source + t*dest
+type Lambertian = { albedo:Vec3 }
+type Metal = {albedo:Vec3; fuzz:float32}
+type Material = 
+    | LambertianType of Lambertian
+    | MetalType of Metal
+
 type HitRecord = 
     struct 
         val t:float32
         val p:Vec3
         val normal:Vec3
-        new(t, p, n) = {t = t; p = p; normal = n}
+        val material:Material
+        new(t, p, n, m) = {t = t; p = p; normal = n; material = m}
     end
 
-type Sphere = {center:Vec3; radius:float32 }
+type Sphere = {center:Vec3; radius:float32; material:Material}
 type SceneObject =
     | SphereObject of Sphere 
     | Cube
 
+//let scatter (r:Ray) 
 type MinMax = {min:float32; max:float32}
 let hitSphere (s:Sphere) (m:MinMax) (r:Ray) = 
     let oc = r.origin - s.center
@@ -79,11 +87,11 @@ let hitSphere (s:Sphere) (m:MinMax) (r:Ray) =
     | (true, true, _) ->
             let p = pointAt r r1
             let norm = (p - s.center) / s.radius
-            Some (HitRecord(r1, p, norm)) 
+            Some (HitRecord(r1, p, norm, s.material)) 
     | (true, false, true) ->
             let p = pointAt r r2
             let norm = (p - s.center) / s.radius
-            Some (HitRecord(r2, p, norm)) 
+            Some (HitRecord(r2, p, norm, s.material)) 
     | (_, _, _) -> 
             None
 let hitSceneObject (m:MinMax) (r:Ray) (hitable:SceneObject)=
@@ -92,7 +100,7 @@ let hitSceneObject (m:MinMax) (r:Ray) (hitable:SceneObject)=
     | Cube -> None
 
 let rec colorRay (rnd:System.Random) (hitables:SceneObject list) (r:Ray) = 
-    let mm = {min=0.0f; max=System.Single.MaxValue}
+    let mm = {min=0.0001f; max=System.Single.MaxValue}
     let boundray = hitSceneObject mm r
     let optionMin (x:HitRecord option) (y:HitRecord option) =
         match x, y with
@@ -134,15 +142,18 @@ let main argv =
     printfn "P3\n %d %d \n255" nx ny
     let cam = Camera.defaultCamera
     let world = [
-        SphereObject {center=Vec3(0.0f, 0.0f, -1.0f); radius=0.5f };
+        SphereObject {center=Vec3(0.0f, 0.0f, -1.0f); radius=0.5f; material=Material {albedo=Vec3(0.8f, 0.3f, 0.3f)}};
         SphereObject {center=Vec3(0.0f, -100.5f, -1.0f); radius=100.0f}
         ]
     let rnd = System.Random()
     for j in [ny-1 .. -1 .. 0] do
         for i in [0 .. nx-1] do
             let rndlist = [for _ in [1..ns] do yield (rnd.NextDouble(), rnd.NextDouble())]
-            let icol = rndlist |> List.map (fun (x,y) -> (((float32 i) + (float32 x)) / (float32  nx), ((float32 j) + (float32 y)) / (float32 ny))) 
-                    |> List.map (fun (u,v) -> colorRay rnd world (cam.getRay u v) ) |> List.fold addColors ({r=0.0f; g=0.0f; b=0.0f}) 
-                    |> fun c -> {r=c.r/(float32 ns); g=c.g/(float32 ns); b=c.b/(float32 ns)} |> colorToIntColor
+            let col = rndlist 
+                    |> List.map (fun (x,y) -> (((float32 i) + (float32 x)) / (float32  nx), ((float32 j) + (float32 y)) / (float32 ny))) 
+                    |> List.map (fun (u,v) -> colorRay rnd world (cam.getRay u v) ) 
+                    |> List.fold addColors ({r=0.0f; g=0.0f; b=0.0f}) 
+                    |> fun c -> {r=sqrt(c.r/(float32 ns)); g=sqrt(c.g/(float32 ns)); b=sqrt(c.b/(float32 ns))} 
+            let icol = col |> colorToIntColor
             printfn "%d %d %d" icol.ir icol.ig icol.ib
     0 // return an integer exit code
