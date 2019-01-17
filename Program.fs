@@ -81,6 +81,10 @@ let refract (v:Vec3) (normal:Vec3) (n_ratio:float32) =
         let cosT = sqrt(1.0f - sinT2)
         Some (n_ratio * I + (n_ratio * cosI - cosT) * normal)
 
+let schlick (cosine:float32) (ref_idx:float32) =
+    let r0 = (1.0f - ref_idx) / (1.0f + ref_idx)
+    let r1 = r0*r0
+    r1 + (1.0f - r1)*(1.0f - cosine)**5.0f
 
 let scatter (r:Ray) (record:HitRecord) = 
     match record.material with
@@ -98,17 +102,26 @@ let scatter (r:Ray) (record:HitRecord) =
     | Dielectric m ->
         //let reflected = reflect (normalize r.direction) record.normal
         
-        let refracted = 
+        let (refracted, cosine) = 
             match dot r.direction record.normal > 0.0f with
             | true ->
-                refract r.direction (-record.normal) m.refractiveIndex
+                (refract r.direction (-record.normal) m.refractiveIndex,
+                    m.refractiveIndex * dot r.direction record.normal / length r.direction )
             | false ->
-                refract r.direction record.normal (1.0f/m.refractiveIndex)
+                (refract r.direction record.normal (1.0f/m.refractiveIndex), 
+                    -(dot r.direction record.normal) / length r.direction)
         match refracted with
-        | Some r -> 
-            Some (m.albedo, Ray(record.p, r))
-        | None ->
-            None 
+            | Some t -> 
+                let reflectProbability = schlick cosine m.refractiveIndex
+                match float32 (rnd.NextDouble()) < reflectProbability with
+                | true ->
+                    let reflected = reflect (normalize r.direction) record.normal
+                    Some (m.albedo, Ray(record.p, reflected))
+                | false ->
+                    Some (m.albedo, Ray(record.p, t))
+            | None -> 
+                let reflected = reflect (normalize r.direction) record.normal
+                Some (m.albedo, Ray(record.p, reflected))
 
 type Sphere = {center:Vec3; radius:float32; material:Material}
 type SceneObject =
@@ -195,7 +208,8 @@ let main argv =
         SphereObject {center=Vec3(0.0f, 0.0f, -1.0f); radius=0.5f; material=Lambertian{albedo=Vec3(0.1f, 0.2f, 0.5f)}};
         SphereObject {center=Vec3(0.0f, -100.5f, -1.0f); radius=100.0f; material=Lambertian{albedo=Vec3(0.8f, 0.8f, 0.0f)}};
         SphereObject {center=Vec3(1.0f, 0.0f, -1.0f); radius=0.5f; material=Metal{albedo=Vec3(0.8f, 0.6f, 0.2f); fuzz=0.0f}};
-        SphereObject {center=Vec3(-1.0f, 0.0f, -1.0f); radius=0.5f; material=Dielectric{albedo=Vec3(1.0f, 1.0f, 1.0f); refractiveIndex=1.5f}};
+        SphereObject {center=Vec3(-1.0f, 0.0f, -1.0f); radius=0.5f; material=Dielectric{albedo=Vec3(0.99f, 0.99f, 0.99f); refractiveIndex=1.5f}};
+        SphereObject {center=Vec3(-1.0f, 0.0f, -1.0f); radius=(-0.45f); material=Dielectric{albedo=Vec3(0.99f, 0.99f, 0.99f); refractiveIndex=1.5f}};
         ]
     for j in [ny-1 .. -1 .. 0] do
         for i in [0 .. nx-1] do
