@@ -1,4 +1,6 @@
-﻿type Color = {r:float32; g:float32; b:float32 }
+﻿let rnd = new System.Random()
+
+type Color = {r:float32; g:float32; b:float32 }
 type IntColor = {ir:int; ig:int; ib:int }
 
 type Vec3 =
@@ -30,7 +32,7 @@ let addColors (c1:Color) (c2:Color) = {r=c1.r+c2.r; g=c1.g+c2.g; b=c1.b+c2.b}
 let mulColorF (f:float32) (c:Color) = {r=f*c.r; g=f*c.g; b=f*c.b}
 let mulColorV (v:Vec3) (c:Color) = {r=v.x*c.r; g=v.y*c.g; b=v.z*c.b}
 let colorToIntColor (c:Color) = { ir=(255.99f * c.r |> int ); ig=(255.99f * c.g |> int); ib=(255.99f * c.b |> int)}
-let randomInUnitSphere (rnd:System.Random) = 
+let randomInUnitSphere () = 
     let x1 = (float32 (rnd.NextDouble()))
     let a = 1.0f - x1*x1
     let x2 = (float32 (rnd.NextDouble())) * sqrt(a)
@@ -67,16 +69,16 @@ type HitRecord =
 let reflect (v:Vec3) (normal:Vec3) = 
     v - 2.0f * dot v normal * normal
 
-let scatter (rnd:System.Random) (r:Ray) (record:HitRecord) = 
+let scatter (r:Ray) (record:HitRecord) = 
     match record.material with
     | Lambertian m ->
-        let target = record.p + record.normal + (randomInUnitSphere rnd)
+        let target = record.p + record.normal + randomInUnitSphere()
         let scattered = Ray(record.p, (target - record.p))  
         Some (m.albedo, scattered)
         
     | Metal m ->
         let reflected = reflect (normalize r.direction) record.normal
-        let scattered = Ray(record.p, reflected + m.fuzz*(randomInUnitSphere rnd))
+        let scattered = Ray(record.p, reflected + m.fuzz*randomInUnitSphere())
         match dot scattered.direction record.normal > 0.0f with
         | true -> Some (m.albedo, scattered)
         | false -> None
@@ -117,7 +119,7 @@ let hitSceneObject (m:MinMax) (r:Ray) (hitable:SceneObject)=
     | SphereObject s -> hitSphere s m r
     | Cube -> None
 
-let rec colorRay (rnd:System.Random) (hitables:SceneObject list) (r:Ray) (depth:int)= 
+let rec colorRay (hitables:SceneObject list) (r:Ray) (depth:int)= 
     let mm = {min=0.0001f; max=System.Single.MaxValue}
     let boundray = hitSceneObject mm r
     let optionMin (x:HitRecord option) (y:HitRecord option) =
@@ -134,10 +136,10 @@ let rec colorRay (rnd:System.Random) (hitables:SceneObject list) (r:Ray) (depth:
     let hit = getClosest hitables None
     match hit with
         | Some hrec -> 
-            let scatterResult = scatter rnd r hrec
+            let scatterResult = scatter r hrec
             match scatterResult with
             | Some (att, scattered) when depth < 50 ->
-                (mulColorV att (colorRay rnd hitables scattered (depth+1)))
+                (mulColorV att (colorRay hitables scattered (depth+1)))
             | Some _ | None -> 
                 {r=0.0f; g=0.0f; b=0.0f} 
         | None -> 
@@ -168,13 +170,12 @@ let main argv =
         SphereObject {center=Vec3(1.0f, 0.0f, -1.0f); radius=0.5f; material=Metal{albedo=Vec3(0.8f, 0.6f, 0.2f); fuzz=1.0f}};
         SphereObject {center=Vec3(-1.0f, 0.0f, -1.0f); radius=0.5f; material=Metal{albedo=Vec3(0.8f, 0.8f, 0.8f); fuzz=0.3f}};
         ]
-    let rnd = System.Random()
     for j in [ny-1 .. -1 .. 0] do
         for i in [0 .. nx-1] do
             let rndlist = [for _ in [1..ns] do yield (rnd.NextDouble(), rnd.NextDouble())]
             let col = rndlist 
                     |> List.map (fun (x,y) -> (((float32 i) + (float32 x)) / (float32  nx), ((float32 j) + (float32 y)) / (float32 ny))) 
-                    |> List.map (fun (u,v) -> colorRay rnd world (cam.getRay u v) 0) 
+                    |> List.map (fun (u,v) -> colorRay world (cam.getRay u v) 0) 
                     |> List.fold addColors ({r=0.0f; g=0.0f; b=0.0f}) 
                     |> fun c -> {r=sqrt(c.r/(float32 ns)); g=sqrt(c.g/(float32 ns)); b=sqrt(c.b/(float32 ns))} 
             let icol = col |> colorToIntColor
