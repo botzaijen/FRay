@@ -53,9 +53,11 @@ let pointAt (r:Ray) (t:float32) = Vec3(r.origin + t*r.direction)
 let lerp (source:Vec3) t (dest:Vec3) = (1.0f-t)*source + t*dest
 type LambertianMaterial = { albedo:Vec3 }
 type MetalMaterial = {albedo:Vec3; fuzz:float32}
+type DielectricMaterial = {albedo:Vec3; refractiveIndex:float32}
 type Material = 
     | Lambertian of LambertianMaterial
     | Metal of MetalMaterial
+    | Dielectric of DielectricMaterial
 
 type HitRecord = 
     struct 
@@ -68,6 +70,17 @@ type HitRecord =
 
 let reflect (v:Vec3) (normal:Vec3) = 
     v - 2.0f * dot v normal * normal
+
+let refract (v:Vec3) (normal:Vec3) (n_ratio:float32) = 
+    let I = normalize(v)
+    let cosI =  -(dot I normal)
+    let sinT2 = n_ratio * n_ratio * (1.0f - cosI * cosI)
+    match sinT2 > 1.0f with
+    | true -> None
+    | false -> 
+        let cosT = sqrt(1.0f - sinT2)
+        Some (n_ratio * I + (n_ratio * cosI - cosT) * normal)
+
 
 let scatter (r:Ray) (record:HitRecord) = 
     match record.material with
@@ -82,6 +95,20 @@ let scatter (r:Ray) (record:HitRecord) =
         match dot scattered.direction record.normal > 0.0f with
         | true -> Some (m.albedo, scattered)
         | false -> None
+    | Dielectric m ->
+        //let reflected = reflect (normalize r.direction) record.normal
+        
+        let refracted = 
+            match dot r.direction record.normal > 0.0f with
+            | true ->
+                refract r.direction (-record.normal) m.refractiveIndex
+            | false ->
+                refract r.direction record.normal (1.0f/m.refractiveIndex)
+        match refracted with
+        | Some r -> 
+            Some (m.albedo, Ray(record.p, r))
+        | None ->
+            None 
 
 type Sphere = {center:Vec3; radius:float32; material:Material}
 type SceneObject =
@@ -165,10 +192,10 @@ let main argv =
     printfn "P3\n %d %d \n255" nx ny
     let cam = Camera.defaultCamera
     let world = [
-        SphereObject {center=Vec3(0.0f, 0.0f, -1.0f); radius=0.5f; material=Lambertian{albedo=Vec3(0.8f, 0.3f, 0.3f)}};
+        SphereObject {center=Vec3(0.0f, 0.0f, -1.0f); radius=0.5f; material=Lambertian{albedo=Vec3(0.1f, 0.2f, 0.5f)}};
         SphereObject {center=Vec3(0.0f, -100.5f, -1.0f); radius=100.0f; material=Lambertian{albedo=Vec3(0.8f, 0.8f, 0.0f)}};
-        SphereObject {center=Vec3(1.0f, 0.0f, -1.0f); radius=0.5f; material=Metal{albedo=Vec3(0.8f, 0.6f, 0.2f); fuzz=1.0f}};
-        SphereObject {center=Vec3(-1.0f, 0.0f, -1.0f); radius=0.5f; material=Metal{albedo=Vec3(0.8f, 0.8f, 0.8f); fuzz=0.3f}};
+        SphereObject {center=Vec3(1.0f, 0.0f, -1.0f); radius=0.5f; material=Metal{albedo=Vec3(0.8f, 0.6f, 0.2f); fuzz=0.0f}};
+        SphereObject {center=Vec3(-1.0f, 0.0f, -1.0f); radius=0.5f; material=Dielectric{albedo=Vec3(1.0f, 1.0f, 1.0f); refractiveIndex=1.5f}};
         ]
     for j in [ny-1 .. -1 .. 0] do
         for i in [0 .. nx-1] do
