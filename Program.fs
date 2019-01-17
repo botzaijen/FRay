@@ -76,7 +76,7 @@ let scatter (rnd:System.Random) (r:Ray) (record:HitRecord) =
         
     | Metal m ->
         let reflected = reflect (normalize r.direction) record.normal
-        let scattered = Ray(record.p, reflected)
+        let scattered = Ray(record.p, reflected + m.fuzz*(randomInUnitSphere rnd))
         match dot scattered.direction record.normal > 0.0f with
         | true -> Some (m.albedo, scattered)
         | false -> None
@@ -165,8 +165,8 @@ let main argv =
     let world = [
         SphereObject {center=Vec3(0.0f, 0.0f, -1.0f); radius=0.5f; material=Lambertian{albedo=Vec3(0.8f, 0.3f, 0.3f)}};
         SphereObject {center=Vec3(0.0f, -100.5f, -1.0f); radius=100.0f; material=Lambertian{albedo=Vec3(0.8f, 0.8f, 0.0f)}};
-        SphereObject {center=Vec3(1.0f, 0.0f, -1.0f); radius=0.5f; material=Metal{albedo=Vec3(0.8f, 0.6f, 0.2f); fuzz=0.0f}};
-        SphereObject {center=Vec3(-1.0f, 0.0f, -1.0f); radius=0.5f; material=Metal{albedo=Vec3(0.8f, 0.8f, 0.8f); fuzz=0.0f}};
+        SphereObject {center=Vec3(1.0f, 0.0f, -1.0f); radius=0.5f; material=Metal{albedo=Vec3(0.8f, 0.6f, 0.2f); fuzz=1.0f}};
+        SphereObject {center=Vec3(-1.0f, 0.0f, -1.0f); radius=0.5f; material=Metal{albedo=Vec3(0.8f, 0.8f, 0.8f); fuzz=0.3f}};
         ]
     let rnd = System.Random()
     for j in [ny-1 .. -1 .. 0] do
