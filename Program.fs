@@ -27,6 +27,8 @@ let normalize (v:Vec3) =
     let k = 1.0f / (length v)
     v*k
 let dot (a:Vec3) (b:Vec3) = a.x*b.x + a.y*b.y + a.z*b.z
+let cross (a:Vec3) (b:Vec3) = 
+    Vec3(a.y*b.z - a.z*b.y, a.z*b.x - a.x*b.z, a.x*b.y - a.y*b.x)
 let colorFromVec3 (v:Vec3) : Color = {r=v.x; g=v.y; b=v.z}
 let addColors (c1:Color) (c2:Color) = {r=c1.r+c2.r; g=c1.g+c2.g; b=c1.b+c2.b}
 let mulColorF (f:float32) (c:Color) = {r=f*c.r; g=f*c.g; b=f*c.b}
@@ -188,22 +190,25 @@ let rec colorRay (hitables:SceneObject list) (r:Ray) (depth:int)=
             let cv = lerp (Vec3(1.0f, 1.0f, 1.0f)) t (Vec3(0.5f, 0.7f, 1.0f))
             (colorFromVec3 cv) 
 
-type Camera = 
-    struct
-        val origin:Vec3
-        val lowerLeftCorner:Vec3
-        val horizontal:Vec3
-        val vertical:Vec3
-        new(o,l,h,v) = {origin=o; lowerLeftCorner=l; horizontal=h; vertical=v }
-    end
-    static member defaultCamera = Camera(Vec3(0.0f, 0.0f, 0.0f), Vec3(-2.0f, -1.0f, -1.0f), Vec3(4.0f, 0.0f, 0.0f), Vec3(0.0f, 2.0f, 0.0f))
+type Camera(lookFrom:Vec3, lookAt:Vec3, vup:Vec3, vfov:float, aspect:float) = 
+    let theta = vfov*System.Math.PI/180.0
+    let half_height = float32 (System.Math.Tan (theta/2.0))
+    let half_width = float32 aspect * half_height
+    let w = normalize (lookFrom - lookAt)
+    let u = normalize (cross vup w)
+    let v = cross w u
+    member this.origin = lookFrom
+    member this.lowerLeftCorner =
+        lookFrom - half_width*u - half_height*v - w
+    member this.horizontal = 2.0f*half_width * u
+    member this.vertical = 2.0f*half_height * v
     member this.getRay (u:float32) (v:float32) = Ray(this.origin, this.lowerLeftCorner + u*this.horizontal + v*this.vertical) 
 
 [<EntryPoint>]
 let main argv = 
     let (nx,ny,ns) = (200, 100, 100)
     printfn "P3\n %d %d \n255" nx ny
-    let cam = Camera.defaultCamera
+    let cam = Camera(Vec3(-2.0f, 2.0f, 1.0f), Vec3(0.0f, 0.0f, -1.0f), Vec3(0.0f, 1.0f, 0.0f), 90.0, (float nx)/(float ny))
     let world = [
         SphereObject {center=Vec3(0.0f, 0.0f, -1.0f); radius=0.5f; material=Lambertian{albedo=Vec3(0.1f, 0.2f, 0.5f)}};
         SphereObject {center=Vec3(0.0f, -100.5f, -1.0f); radius=100.0f; material=Lambertian{albedo=Vec3(0.8f, 0.8f, 0.0f)}};
