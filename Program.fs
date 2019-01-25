@@ -43,6 +43,14 @@ let randomInUnitSphere () =
     let XYZ = [x1; x2; x3] |> List.map (fun x -> (rnd.Next(), x)) |> List.sortBy fst |> List.map (fun (x,y) -> y)
     Vec3(XYZ.[0], XYZ.[1], XYZ.[2])
 
+let randomInUnitDisk () = 
+    let x1 = (float32 (rnd.NextDouble()))
+    let a = 1.0f - x1*x1
+    let x2 = (float32 (rnd.NextDouble())) * sqrt(a)
+    let XY = [x1; x2] |> List.map (fun x -> (rnd.Next(), x)) |> List.sortBy fst |> List.map (fun (x,y) -> y)
+    Vec3(XY.[0], XY.[1], 0.0f)
+    
+
 type Ray = 
     struct
         val origin:Vec3
@@ -190,25 +198,36 @@ let rec colorRay (hitables:SceneObject list) (r:Ray) (depth:int)=
             let cv = lerp (Vec3(1.0f, 1.0f, 1.0f)) t (Vec3(0.5f, 0.7f, 1.0f))
             (colorFromVec3 cv) 
 
-type Camera(lookFrom:Vec3, lookAt:Vec3, vup:Vec3, vfov:float, aspect:float) = 
+type Camera(lookFrom:Vec3, lookAt:Vec3, vup:Vec3, vfov:float, aspect:float, aperture:float32, focusDist:float32) = 
     let theta = vfov*System.Math.PI/180.0
     let half_height = float32 (System.Math.Tan (theta/2.0))
     let half_width = float32 aspect * half_height
-    let w = normalize (lookFrom - lookAt)
-    let u = normalize (cross vup w)
-    let v = cross w u
+    member this.w = normalize (lookFrom - lookAt)
+    member this.u = normalize (cross vup this.w)
+    member this.v = cross this.w this.u
+    member this.lensRadius = aperture / 2.0f
     member this.origin = lookFrom
     member this.lowerLeftCorner =
-        lookFrom - half_width*u - half_height*v - w
-    member this.horizontal = 2.0f*half_width * u
-    member this.vertical = 2.0f*half_height * v
-    member this.getRay (u:float32) (v:float32) = Ray(this.origin, this.lowerLeftCorner + u*this.horizontal + v*this.vertical - this.origin) 
+        lookFrom - half_width*focusDist*this.u 
+        - half_height*focusDist*this.v - focusDist*this.w
+    member this.horizontal = 2.0f*focusDist*half_width * this.u
+    member this.vertical = 2.0f*focusDist*half_height * this.v
+    member this.getRay (u:float32) (v:float32) = 
+        let rd = this.lensRadius*randomInUnitDisk()
+        let offset = this.u * rd.x + this.v * rd.y
+        Ray(this.origin + offset, 
+            this.lowerLeftCorner + u*this.horizontal 
+            + v*this.vertical - this.origin - offset) 
 
 [<EntryPoint>]
 let main argv = 
     let (nx,ny,ns) = (200, 100, 100)
     printfn "P3\n %d %d \n255" nx ny
-    let cam = Camera(Vec3(-2.0f, 2.0f, 1.0f), Vec3(0.0f, 0.0f, -1.0f), Vec3(0.0f, 1.0f, 0.0f), 30.0, (float nx)/(float ny))
+    let lookFrom = Vec3(3.0f, 3.0f, 2.0f)
+    let lookAt = Vec3(0.0f, 0.0f, -1.0f)
+    let distToFocus = length (lookFrom-lookAt)
+    let aperture = 2.0f
+    let cam = Camera(lookFrom, lookAt, Vec3(0.0f, 1.0f, 0.0f), 20.0, (float nx)/(float ny), aperture, distToFocus)
     //let cam = Camera(Vec3(0.0f, 0.0f, -1.0f), Vec3(0.0f, 0.0f, -1.0f), Vec3(0.0f, 1.0f, 0.0f), 90.0, (float nx)/(float ny))
     let world = [
         SphereObject {center=Vec3(0.0f, 0.0f, -1.0f); radius=0.5f; material=Lambertian{albedo=Vec3(0.1f, 0.2f, 0.5f)}};
