@@ -202,13 +202,14 @@ type Camera(lookFrom:Vec3, lookAt:Vec3, vup:Vec3, vfov:float, aspect:float) =
         lookFrom - half_width*u - half_height*v - w
     member this.horizontal = 2.0f*half_width * u
     member this.vertical = 2.0f*half_height * v
-    member this.getRay (u:float32) (v:float32) = Ray(this.origin, this.lowerLeftCorner + u*this.horizontal + v*this.vertical) 
+    member this.getRay (u:float32) (v:float32) = Ray(this.origin, this.lowerLeftCorner + u*this.horizontal + v*this.vertical - this.origin) 
 
 [<EntryPoint>]
 let main argv = 
     let (nx,ny,ns) = (200, 100, 100)
     printfn "P3\n %d %d \n255" nx ny
-    let cam = Camera(Vec3(-2.0f, 2.0f, 1.0f), Vec3(0.0f, 0.0f, -1.0f), Vec3(0.0f, 1.0f, 0.0f), 90.0, (float nx)/(float ny))
+    let cam = Camera(Vec3(-2.0f, 2.0f, 1.0f), Vec3(0.0f, 0.0f, -1.0f), Vec3(0.0f, 1.0f, 0.0f), 30.0, (float nx)/(float ny))
+    //let cam = Camera(Vec3(0.0f, 0.0f, -1.0f), Vec3(0.0f, 0.0f, -1.0f), Vec3(0.0f, 1.0f, 0.0f), 90.0, (float nx)/(float ny))
     let world = [
         SphereObject {center=Vec3(0.0f, 0.0f, -1.0f); radius=0.5f; material=Lambertian{albedo=Vec3(0.1f, 0.2f, 0.5f)}};
         SphereObject {center=Vec3(0.0f, -100.5f, -1.0f); radius=100.0f; material=Lambertian{albedo=Vec3(0.8f, 0.8f, 0.0f)}};
